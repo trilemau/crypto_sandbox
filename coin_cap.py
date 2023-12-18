@@ -71,18 +71,25 @@ def simulate_trading(prices, from_date=None, until_date=None):
 
     capital = 10000  # Starting capital in EUR
     holding = 0  # Initial holding in BTC
-    # rsi_buy_threshold = 45
-    # rsi_sell_threshold = 85
+    invested_amount = 0  # Track the total fiat money used to buy BTC
     rsi_buy_threshold = 50
-    rsi_sell_threshold = 65
+    rsi_sell_threshold = 85
+    fixed_buy_amount = 500  # Fixed amount to buy in fiat currency
+
+    # Track the last month to determine when to buy
+    last_month = None
 
     for index, row in prices.iterrows():
-        if row['rsi'] <= rsi_buy_threshold and capital > 0:
-            # Buy BTC with available capital
-            btc_bought = capital / row['price']
+        current_month = row['time'].month
+
+        # Buy fixed amount of BTC every month when RSI is under the threshold and it's a new month
+        if row['rsi'] <= rsi_buy_threshold and current_month != last_month and capital >= fixed_buy_amount:
+            # Buy fixed amount of BTC with available capital
+            btc_bought = fixed_buy_amount / row['price']
             holding += btc_bought
-            capital = 0
-            print(f"Buy BTC at {row['time']} - RSI: {row['rsi']}, Price: {row['price']}, Holding: {holding}")
+            capital -= fixed_buy_amount
+            invested_amount += fixed_buy_amount
+            print(f"Buy {fixed_buy_amount} EUR of BTC at {row['time']} - RSI: {row['rsi']}, Price: {row['price']}, Holding: {holding}")
 
         elif row['rsi'] >= rsi_sell_threshold and holding > 0:
             # Sell all BTC
@@ -90,10 +97,16 @@ def simulate_trading(prices, from_date=None, until_date=None):
             holding = 0
             print(f"Sell BTC at {row['time']} - RSI: {row['rsi']}, Price: {row['price']}, Capital: {capital}")
 
+        last_month = current_month
+
     # If still holding at the end, sell
     if holding > 0:
         capital += holding * prices.iloc[-1]['price']
         print(f"Sell remaining BTC at {prices.iloc[-1]['time']} - Price: {prices.iloc[-1]['price']}, Capital: {capital}")
+
+    # Calculate the investment return
+    investment_return = (capital + holding * prices.iloc[-1]['price'] - invested_amount) / invested_amount * 100
+    print(f"Investment Return: {investment_return:.2f}%")
 
     return capital
 
