@@ -3,6 +3,25 @@ import pandas as pd
 import talib
 import matplotlib.pyplot as plt
 from datetime import datetime
+import json
+
+def load_json():
+    # Load JSON data from file
+    with open('your_file.json', 'r') as file:
+        data = json.load(file)
+
+    # Extract the Price dictionary
+    price_data = data.get('Price', {})
+
+    # Convert timestamp keys to datetime and create the date-risk dictionary
+    date_risk_dict = {pd.to_datetime(timestamp, unit='s'): risk for timestamp, risk in price_data.items()}
+
+    # Print the result
+    # for date, risk in date_risk_dict.items():
+    #     print(f"{date}: {risk}")
+
+    return date_risk_dict
+
 
 def days_until_current_date(target_date):
     # Convert the input date to a datetime object
@@ -69,12 +88,13 @@ def simulate_trading(prices, from_date=None, until_date=None):
     if until_date:
         prices = prices[prices['time'] <= pd.to_datetime(until_date)]
 
-    capital = 10000  # Starting capital in EUR
+    capital = 0
     holding = 0  # Initial holding in BTC
     invested_amount = 0  # Track the total fiat money used to buy BTC
-    rsi_buy_threshold = 50
+    rsi_buy_threshold = 80
     rsi_sell_threshold = 85
-    fixed_buy_amount = 500  # Fixed amount to buy in fiat currency
+    base_buy_amount = 1500  # Base amount to buy in fiat currency
+    buy_count = 0
 
     # Track the last month to determine when to buy
     last_month = None
@@ -82,14 +102,17 @@ def simulate_trading(prices, from_date=None, until_date=None):
     for index, row in prices.iterrows():
         current_month = row['time'].month
 
-        # Buy fixed amount of BTC every month when RSI is under the threshold and it's a new month
-        if row['rsi'] <= rsi_buy_threshold and current_month != last_month and capital >= fixed_buy_amount:
-            # Buy fixed amount of BTC with available capital
-            btc_bought = fixed_buy_amount / row['price']
+        # Adjust buy amount based on RSI
+        rsi_adjusted_buy_amount = base_buy_amount * (1 - row['rsi'] / 100)
+
+        # Buy BTC every month when RSI is under the threshold and it's a new month
+        if row['rsi'] <= rsi_buy_threshold and current_month != last_month:
+            # Buy BTC
+            btc_bought = rsi_adjusted_buy_amount / row['price']
             holding += btc_bought
-            capital -= fixed_buy_amount
-            invested_amount += fixed_buy_amount
-            print(f"Buy {fixed_buy_amount} EUR of BTC at {row['time']} - RSI: {row['rsi']}, Price: {row['price']}, Holding: {holding}")
+            invested_amount += rsi_adjusted_buy_amount
+            buy_count += 1
+            print(f"Buy {rsi_adjusted_buy_amount:.2f} EUR of BTC at {row['time']} - RSI: {row['rsi']}, Price: {row['price']}, Holding: {holding}")
 
         elif row['rsi'] >= rsi_sell_threshold and holding > 0:
             # Sell all BTC
@@ -106,12 +129,16 @@ def simulate_trading(prices, from_date=None, until_date=None):
 
     # Calculate the investment return
     investment_return = (capital + holding * prices.iloc[-1]['price'] - invested_amount) / invested_amount * 100
+
+    print(f"Invested: {invested_amount}")
     print(f"Investment Return: {investment_return:.2f}%")
+    print(f"Number of buys: {buy_count}")
 
     return capital
 
+
 def main():
-    target_date = "2015-01-01"
+    target_date = "2014-01-01"
     days = days_until_current_date(target_date)
 
     # Get historical Bitcoin prices
@@ -124,15 +151,22 @@ def main():
     # Calculate RSI
     bitcoin_prices_timeframe = calculate_rsi(bitcoin_prices_timeframe)
 
-    from_date = '2018-01-01'
-    until_date = '2022-12-31'
+    from_date = '2020-05-01'
+    until_date = '2021-02-28'
 
     # Simulate trading
     final_capital = simulate_trading(bitcoin_prices_timeframe, from_date, until_date)
     print(f"Final capital after simulation: {final_capital} EUR")
 
+    # from_date = '2014-01-01'
+    # until_date = '2018-02-02'
+
+    # # Simulate trading
+    # final_capital = simulate_trading(bitcoin_prices_timeframe, from_date, until_date)
+    # print(f"Final capital after simulation: {final_capital} EUR")
+
     # Plot data
-    plot_data(bitcoin_prices_timeframe, timeframe)
+    # plot_data(bitcoin_prices_timeframe, timeframe)
 
     print("Done.")
 
